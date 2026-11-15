@@ -1,0 +1,63 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: tamashii <tamashiimon@gmail.com>
+Date: Sat, 14 Nov 2026 19:34:21 +0100
+Subject: [PATCH] Minecart loads chunks
+
+
+diff --git a/net/minecraft/server/level/TicketType.java b/net/minecraft/server/level/TicketType.java
+index fed2a68bf1a9e9a169c0235e129346b9b624170b..cd76eed7c13e82643d4a82214bbf9586c6747c8c 100644
+--- a/net/minecraft/server/level/TicketType.java
++++ b/net/minecraft/server/level/TicketType.java
+@@ -68,6 +68,7 @@ public final class TicketType<T> implements ca.spottedleaf.moonrise.patches.chun
+     public static final TicketType PLUGIN_TICKET = register("plugin_ticket", NO_TIMEOUT, FLAG_LOADING | FLAG_SIMULATION); static { ((TicketType<org.bukkit.plugin.Plugin>)PLUGIN_TICKET).moonrise$setIdentifierComparator((org.bukkit.plugin.Plugin p1, org.bukkit.plugin.Plugin p2) -> p1.getName().compareTo(p2.getName())); } // Paper // Paper - rewrite chunk system
+     public static final TicketType FUTURE_AWAIT = register("future_await", NO_TIMEOUT, FLAG_LOADING | FLAG_SIMULATION); // Paper
+     public static final TicketType CHUNK_LOAD = register("chunk_load", NO_TIMEOUT, FLAG_LOADING); // Paper - moonrise
++    public static final TicketType MINECART = register("minecart", 20L, FLAG_LOADING | FLAG_SIMULATION); // QanvasPaper - minecart chunk loading
+
+     private static TicketType register(final String name, final long timeout, final @TicketType.Flags int flags) {
+         return Registry.register(BuiltInRegistries.TICKET_TYPE, name, new TicketType(timeout, flags));
+diff --git a/net/minecraft/world/entity/vehicle/minecart/AbstractMinecart.java b/net/minecraft/world/entity/vehicle/minecart/AbstractMinecart.java
+index db16f4802235646d3e20eebf417951391f3193e8..44722405fee7b565525044e85b1db4f2286da228 100644
+--- a/net/minecraft/world/entity/vehicle/minecart/AbstractMinecart.java
++++ b/net/minecraft/world/entity/vehicle/minecart/AbstractMinecart.java
+@@ -308,6 +308,11 @@ public abstract class AbstractMinecart extends VehicleEntity {
+
+         this.checkBelowWorld();
+         this.computeSpeed();
++        // QanvasPaper start - minecart chunk loading
++        if (this.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
++            this.holdChunksAhead(serverLevel);
++        }
++        // QanvasPaper end
+         // this.handlePortal(); // CraftBukkit - handled in postTick
+         this.behavior.tick();
+         // CraftBukkit start
+@@ -332,6 +337,28 @@ public abstract class AbstractMinecart extends VehicleEntity {
+         this.firstTick = false;
+     }
+
++    // QanvasPaper start - minecart chunk loading
++    private void holdChunksAhead(final net.minecraft.server.level.ServerLevel level) {
++        final Vec3 dm = this.getDeltaMovement();
++        final double speedSqr = dm.horizontalDistanceSqr();
++        if (speedSqr < 1.0E-4) {
++            return;
++        }
++
++        final int ahead = Math.max(1, (int) Math.ceil(Math.sqrt(speedSqr) * 20.0 / 16.0));
++        final Vec3 dir = dm.multiply(1.0, 0.0, 1.0).normalize();
++        net.minecraft.world.level.ChunkPos last = null;
++        for (int i = 0; i <= ahead * 2; i++) {
++            final net.minecraft.world.level.ChunkPos pos = net.minecraft.world.level.ChunkPos.containing(BlockPos.containing(this.position().add(dir.scale(i * 8.0))));
++            if (pos.equals(last)) {
++                continue;
++            }
++            last = pos;
++            level.getChunkSource().addTicketWithRadius(net.minecraft.server.level.TicketType.MINECART, pos, 2);
++        }
++    }
++    // QanvasPaper end
++
+     public boolean isFirstTick() {
+         return this.firstTick;
+     }
