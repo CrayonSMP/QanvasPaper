@@ -1,0 +1,76 @@
+name: Automatically update Paper commit hash
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "0 0 * * *"
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '25'
+
+      - name: Checkout Qanvas Repository
+        uses: actions/checkout@v4
+
+      - name: Checkout Paper Repository
+        uses: actions/checkout@v4
+        with:
+          path: 'Paper'
+          repository: "PaperMC/Paper"
+          ref: 'main'
+
+      - name: Get Latest Paper Version
+        id: upstreamVersion
+        run: |
+          cd Paper
+          echo "paperRef=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+          echo "mcVersion=$(cat gradle.properties | perl -ne 'if (m/mcVersion=([0-9\.]+)/) { print $1 }')" >> $GITHUB_OUTPUT
+          cd ..
+
+      - name: Update paperRef to Paper's latest commit
+        id: update
+        run: |
+          upstreamPaperRef=${{steps.upstreamVersion.outputs.paperRef}}
+          upstreamMCVersion=${{steps.upstreamVersion.outputs.mcVersion}}
+          currentPaperRef=$(cat gradle.properties | perl -ne 'if (m/paperRef=([0-9a-f]+)/) { print $1 }')
+          currentMCVersion=$(cat gradle.properties | perl -ne 'if (m/mcVersion=([0-9\.]+)/) { print $1 }')
+
+          if [[ "$upstreamMCVersion" != "$currentMCVersion" ]]; then
+            echo "Mismatched Minecraft Versions! Upstream is using $upstreamMCVersion while we are using $currentMCVersion"
+            exit 1
+          fi
+
+          if [[ "$upstreamPaperRef" == "$currentPaperRef" ]]; then
+            echo "We are already up to date. Upstream is using $upstreamPaperRef while we are using $currentPaperRef"
+            exit 1
+          fi
+
+          sed -i "s/^paperRef=.*/paperRef=$upstreamPaperRef/" gradle.properties
+
+      - name: Configure Git User Details
+        run: git config --global user.email "actions@github.com" && git config --global user.name "Github Actions"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Apply Patches
+        run: |
+          chmod +x gradlew
+          ./gradlew applyAllPatches
+
+      - name: Build
+        run: ./gradlew build -x test
+
+      - name: Commit and push
+        run: |
+          chmod +x commit_upstream_update.sh
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          ./commit_upstream_update.sh
+          git push
