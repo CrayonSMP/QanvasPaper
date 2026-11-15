@@ -13,7 +13,7 @@ index fed2a68bf1a9e9a169c0235e129346b9b624170b..cd76eed7c13e82643d4a82214bbf9586
      public static final TicketType FUTURE_AWAIT = register("future_await", NO_TIMEOUT, FLAG_LOADING | FLAG_SIMULATION); // Paper
      public static final TicketType CHUNK_LOAD = register("chunk_load", NO_TIMEOUT, FLAG_LOADING); // Paper - moonrise
 +    public static final TicketType MINECART = register("minecart", 20L, FLAG_LOADING | FLAG_SIMULATION); // QanvasPaper - minecart chunk loading
-
+ 
      private static TicketType register(final String name, final long timeout, final @TicketType.Flags int flags) {
          return Registry.register(BuiltInRegistries.TICKET_TYPE, name, new TicketType(timeout, flags));
 diff --git a/net/minecraft/world/entity/vehicle/minecart/AbstractMinecart.java b/net/minecraft/world/entity/vehicle/minecart/AbstractMinecart.java
@@ -21,7 +21,7 @@ index db16f4802235646d3e20eebf417951391f3193e8..44722405fee7b565525044e85b1db4f2
 --- a/net/minecraft/world/entity/vehicle/minecart/AbstractMinecart.java
 +++ b/net/minecraft/world/entity/vehicle/minecart/AbstractMinecart.java
 @@ -308,6 +308,11 @@ public abstract class AbstractMinecart extends VehicleEntity {
-
+ 
          this.checkBelowWorld();
          this.computeSpeed();
 +        // QanvasPaper start - minecart chunk loading
@@ -35,7 +35,7 @@ index db16f4802235646d3e20eebf417951391f3193e8..44722405fee7b565525044e85b1db4f2
 @@ -332,6 +337,28 @@ public abstract class AbstractMinecart extends VehicleEntity {
          this.firstTick = false;
      }
-
+ 
 +    // QanvasPaper start - minecart chunk loading
 +    private void holdChunksAhead(final net.minecraft.server.level.ServerLevel level) {
 +        final Vec3 dm = this.getDeltaMovement();
